@@ -39,7 +39,6 @@ BasedOnStyle: Google  # Use the Google C++ style as the base for our format
 Language: Cpp
 ColumnLimit: 120  # Set column limit to 120
 DerivePointerAlignment: false  # Don't attempt to detect pointer alignment from file
-PointerAlignment: Right  # foo &bar;
 SortIncludes: false  # Sorting includes is currently causing builds to break
 AlignConsecutiveDeclarations: true
 AlignConsecutiveAssignments: true
@@ -49,8 +48,6 @@ AllowShortBlocksOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortFunctionsOnASingleLine: true
 SpacesInParentheses: true
-ConstructorInitializerAllOnOneLineOrOnePerLine: false
-DerivePointerAlignment: false
 PointerAlignment: Left
 IndentFunctionDeclarationAfterType: true
 BreakConstructorInitializers: AfterColon
