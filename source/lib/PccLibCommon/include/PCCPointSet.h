@@ -165,6 +165,54 @@ class PCCPointSet3 {
     }
   }
 
+  void processNormalsFromRGB16() {
+    for ( size_t k = 0; k < getPointCount(); k++ ) {
+      double nx          = ( normals_[k][0] / 255 ) * 2 - 1;
+      double ny          = ( normals_[k][1] / 255 ) * 2 - 1;
+      double nz          = ( normals_[k][2] / 255 ) * 2 - 1;
+      double normInverse = 1 / sqrt( nx * nx + ny * ny + nz * nz );
+
+      normals_[k][0] = nx * normInverse;
+      normals_[k][1] = ny * normInverse;
+      normals_[k][2] = nz * normInverse;
+    }
+  }
+
+  void processNormalsFromYUV16() {
+    for ( size_t k = 0; k < getPointCount(); k++ ) {
+      double y1     = normals_[k][0];
+      double u1     = normals_[k][1];
+      double v1     = normals_[k][2];
+      double offset = 32768.0;
+      double scale  = 65535.0;
+      double weight = 1.0 / scale;
+
+      y1 = weight * y1;
+      u1 = weight * ( u1 - offset );
+      v1 = weight * ( v1 - offset );
+      y1 = (std::max)( y1, 0.0 );
+      y1 = (std::min)( y1, 1.0 );
+      u1 = (std::max)( u1, -0.5 );
+      u1 = (std::min)( u1, 0.5 );
+      v1 = (std::max)( v1, -0.5 );
+      v1 = (std::min)( v1, 0.5 );
+
+      //// convert normalized yuv444 to normalized rgb (format double)
+      double r = y1 /*- 0.00000 * u1*/ + 1.57480 * v1;
+      double g = y1 - 0.18733 * u1 - 0.46813 * v1;
+      double b = y1 + 1.85563 * u1 /*+ 0.00000 * v1*/;
+
+      double nx          = r * 2 - 1;
+      double ny          = g * 2 - 1;
+      double nz          = b * 2 - 1;
+      double normInverse = 1 / sqrt( nx * nx + ny * ny + nz * nz );
+
+      normals_[k][0] = nx * normInverse;
+      normals_[k][1] = ny * normInverse;
+      normals_[k][2] = nz * normInverse;
+    }
+  }
+
   uint16_t getBoundaryPointType( const size_t index ) const {
     assert( index < boundaryPointTypes_.size() );
     return boundaryPointTypes_[index];
@@ -255,6 +303,15 @@ class PCCPointSet3 {
     colors16bit_.resize( 0 );
   }
   const std::vector<PCCNormal3D>& getNormals() const { return normals_; }
+  std::vector<PCCNormal3D>&       getNormals() { return normals_; }
+  PCCNormal3D                     getNormal( const size_t index ) const {
+    assert( index < normals_.size() && withNormals_ );
+    return normals_[index];
+  }
+  PCCNormal3D&                    getNormal( const size_t index ) {
+    assert( index < normals_.size() && withNormals_ );
+    return normals_[index];
+  }
   bool                            hasNormals() const { return withNormals_; }
   void                            addNormals() {
     withNormals_ = true;
@@ -363,6 +420,8 @@ class PCCPointSet3 {
   bool transferColorSimple( PCCPointSet3& target, const double bestColorSearchStep = 0.1 );
 
   bool transferColorWeight( PCCPointSet3& target, const double bestColorSearchStep = 0.1 );
+
+  bool transferNormalWeight( PCCPointSet3& target, const double bestNormalSearchStep = 0.1 );
 
   size_t getPointCount() const { return positions_.size(); }
   void   resize( const size_t size ) {
@@ -496,6 +555,10 @@ class PCCPointSet3 {
   void                 removeDuplicate( PCCPointSet3& newPointcloud, size_t dropDuplicates ) const;
   void                 copyNormals( const PCCPointSet3& sourceWithNormal );
   void                 scaleNormals( const PCCPointSet3& sourceWithNormal );
+  void fillNormal( PCCNormal3D normal = { 0, 0, 1 } ) {
+    for ( size_t k = 0; k < getPointCount(); k++ ) { normals_[k] = normal; }
+  }
+
   std::vector<uint8_t> computeChecksum( bool reorderPoints = false );
   void                 sortColor( std::vector<size_t>& list );
   void                 reorder();

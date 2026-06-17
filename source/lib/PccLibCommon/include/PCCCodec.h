@@ -173,6 +173,15 @@ class PCCCodec {
                           size_t                              accTilePointCount,
                           const GeneratePointCloudParameters& params );
 
+  size_t addNormalsToPointCloud( PCCPointSet3&                       reconstruct,
+                                 PCCContext&                         context,
+                                 PCCFrameContext&                    tile,
+                                 const std::vector<bool>&            absoluteT1List,
+                                 const size_t                        multipleStreams,
+                                 const uint8_t                       attributeCount,
+                                 size_t                              accTilePointCount,
+                                 const GeneratePointCloudParameters& params );
+
   void smoothPointCloudPostprocess( PCCPointSet3&                       reconstruct,
                                     const PCCColorTransform             colorTransform,
                                     const GeneratePointCloudParameters& params,

@@ -196,11 +196,26 @@ class PCCContext : public PCCHighLevelSyntax {
   uint16_t             computeCRC( uint8_t* byteString, size_t size );
   uint32_t             computeCheckSum( uint8_t* byteString, size_t size );
 
+  void addColors() { hasColors_ = true; }
+  void removeColors() { hasColors_ = false; }
+  bool hasColors() { return hasColors_; }
+
+  void addNormals() { hasNormals_ = true; }
+  void removeNormals() { hasNormals_ = false; }
+  bool hasNormals() { return hasNormals_; }
+
+  void removeAttributeTypeFlags() {
+    removeColors();
+    removeNormals();
+  }
+
  private:
   PCCVector3<float>            modelOrigin_;
   float                        modelScale_;
   std::vector<PCCAtlasContext> atlasContexts_;
   size_t                       atlasIndex_;
+  bool                         hasColors_;
+  bool                         hasNormals_;
 };
 };  // namespace pcc
 

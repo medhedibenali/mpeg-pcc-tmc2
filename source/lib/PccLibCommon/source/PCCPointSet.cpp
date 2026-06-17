@@ -2279,6 +2279,38 @@ bool PCCPointSet3::transferColorWeight( PCCPointSet3& target, const double bestC
   return true;
 }
 
+bool PCCPointSet3::transferNormalWeight( PCCPointSet3& target, const double bestNormalSearchStep ) {
+  const auto&  source           = *this;
+  const size_t pointCountSource = source.getPointCount();
+  const size_t pointCountTarget = target.getPointCount();
+  if ( ( pointCountSource == 0u ) || ( pointCountTarget == 0u ) || !source.hasNormals() ) { return false; }
+  target.addNormals();
+  PCCKdTree    kdtreeSource( source );
+  PCCNNResult  result;
+  const size_t num_results = 5;
+  for ( size_t index = 0; index < pointCountTarget; ++index ) {
+    kdtreeSource.search( target[index], num_results, result );
+    PCCNormal3D normal( 0.0 );
+    if ( result.size() > 1 && result.dist( 0 ) > 0.0001 ) {
+      double sum = 0;
+      for ( size_t i = 0; i < result.size(); ++i ) {
+        const double w     = 1.0 / pow( result.dist( i ), 2.0 );
+        auto         found = source.getNormal( result.indices( i ) );
+        PCCNormal3D  scaled;
+        scaled = found;
+        normal += scaled * w;
+        sum += w;
+      }
+      normal /= sum;
+    } else {
+      const auto& found = source.getNormal( result.indices( 0 ) );
+      normal            = found;
+    }
+    target.getNormal( index ) = normal;
+  }
+  return true;
+}
+
 void PCCPointSet3::copyNormals( const PCCPointSet3& sourceWithNormal ) {
   if ( !sourceWithNormal.withNormals_ ) {
     std::cerr << "Normal object don't have normals \n" << std::endl;

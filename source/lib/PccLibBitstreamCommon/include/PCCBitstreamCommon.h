@@ -225,6 +225,11 @@ enum PCCHashPatchType {
   EOM             // 2: eom
 };
 
+enum PCCAttributeType {
+  COLORS_ATTRIBUTE,
+  NORMALS_ATTRIBUTE,
+};
+
 enum SeiPayloadType {
   BUFFERING_PERIOD                 = 0,   //  0: buffering period
   ATLAS_FRAME_TIMING               = 1,   //  1: atlas frame timing

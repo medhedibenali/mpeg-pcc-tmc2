@@ -71,6 +71,7 @@ int PCCDecoder::decode( PCCContext& context, PCCGroupOfFrames& reconstructs, int
   if ( params_.nbThread_ > 0 ) { tbb::task_scheduler_init init( static_cast<int>( params_.nbThread_ ) ); }
 #endif
   createPatchFrameDataStructure( context );
+  context.removeAttributeTypeFlags();
 
   PCCVideoDecoder videoDecoder;
   videoDecoder.setLogger( *logger_ );
@@ -192,6 +193,12 @@ int PCCDecoder::decode( PCCContext& context, PCCGroupOfFrames& reconstructs, int
       auto attributeCodecId =
           getCodedCodecId( context, ai.getAttributeCodecId( attrIndex ), params_.videoDecoderAttributePath_ );
       printf( "CodecId attributeCodecId = %d \n", (int)attributeCodecId );
+
+      switch ( attributeTypeId ) {
+        case NORMALS_ATTRIBUTE: context.addNormals(); break;
+        default: context.addColors(); break;
+      }
+
       for ( int attrPartitionIndex = 0; attrPartitionIndex < attributeDimension; attrPartitionIndex++ ) {
         if ( sps.getMultipleMapStreamsPresentFlag( atlasIndex ) ) {
           int sizeAttributeVideo = 0;
@@ -354,15 +361,38 @@ int PCCDecoder::decode( PCCContext& context, PCCGroupOfFrames& reconstructs, int
         context[frameIdx].getTitleFrameContext().appendPointToPixel(
             context[frameIdx].getTile( tileIdx ).getPointToPixel() );
       if ( ai.getAttributeCount() > 0 ) {
-        reconstruct.addColors();
-        reconstruct.addColors16bit();
+        if ( context.hasColors() ) {
+          reconstruct.addColors();
+          reconstruct.addColors16bit();
+        }
+
+        if ( context.hasNormals() ) { reconstruct.addNormals(); }
+
         for ( size_t attIdx = 0; attIdx < ai.getAttributeCount(); attIdx++ ) {
-          printf( "start colorPointCloud attIdx = %zu / %u ] \n", attIdx, ai.getAttributeCount() );
-          fflush( stdout );
-          size_t updatedPointCount  = colorPointCloud( reconstruct, context, tile, absoluteT1List[attIdx],
-                                                      sps.getMultipleMapStreamsPresentFlag( atlasIndex ),
-                                                      ai.getAttributeCount(), accTilePointCount[attIdx], gpcParams );
-          accTilePointCount[attIdx] = updatedPointCount;
+          int attributeTypeId = ai.getAttributeTypeId( attIdx );
+
+          switch ( attributeTypeId ) {
+            case NORMALS_ATTRIBUTE: {
+              printf( "start addNormalsToPointCloud attIdx = %zu / %u ] \n", attIdx, ai.getAttributeCount() );
+              fflush( stdout );
+              size_t updatedPointCount =
+                  addNormalsToPointCloud( reconstruct, context, tile, absoluteT1List[attIdx],
+                                          sps.getMultipleMapStreamsPresentFlag( atlasIndex ), ai.getAttributeCount(),
+                                          accTilePointCount[attIdx], gpcParams );
+              accTilePointCount[attIdx] = updatedPointCount;
+              break;
+            }
+            default: {
+              printf( "start colorPointCloud attIdx = %zu / %u ] \n", attIdx, ai.getAttributeCount() );
+              fflush( stdout );
+              size_t updatedPointCount =
+                  colorPointCloud( reconstruct, context, tile, absoluteT1List[attIdx],
+                                   sps.getMultipleMapStreamsPresentFlag( atlasIndex ), ai.getAttributeCount(),
+                                   accTilePointCount[attIdx], gpcParams );
+              accTilePointCount[attIdx] = updatedPointCount;
+              break;
+            }
+          }
         }
       }
     }  // tile
@@ -378,6 +408,7 @@ int PCCDecoder::decode( PCCContext& context, PCCGroupOfFrames& reconstructs, int
     if ( ai.getAttributeCount() == 0 ) {
       reconstructs[frameIdx].removeColors();
       reconstructs[frameIdx].removeColors16bit();
+      reconstructs[frameIdx].removeNormals();
     } else {
       bool isAttributes444 = context.getVideoAttributesMultiple( 0 ).getColorFormat() == PCCCOLORFORMAT::RGB444;
       if ( !isAttributes444 ) {  // lossy: convert 16-bit yuv444 to 8-bit RGB444
@@ -466,11 +497,23 @@ int PCCDecoder::decode( PCCContext& context, PCCGroupOfFrames& reconstructs, int
       }
       if ( context.getVideoAttributesMultiple( 0 ).getColorFormat() !=
            PCCCOLORFORMAT::RGB444 ) {  // lossy: convert 16-bit yuv444 to 8-bit RGB444
-        TRACE_PATCH( "lossy: convert 16-bit yuv444 to 8-bit RGB444 (convertYUV16ToRGB8) \n" );
-        reconstruct.convertYUV16ToRGB8();
+        if ( context.hasColors() ) {
+          TRACE_PATCH( "lossy: convert 16-bit yuv444 to 8-bit RGB444 (convertYUV16ToRGB8) \n" );
+          reconstruct.convertYUV16ToRGB8();
+        }
+        if ( context.hasNormals() ) {
+          TRACE_PATCH( "process normals from 16-bit yuv444 (processNormalsFromYUV16) \n" );
+          reconstruct.processNormalsFromYUV16();
+        }
       } else {  // lossless: copy 16-bit RGB to 8-bit RGB
-        TRACE_PATCH( "lossy: lossless: copy 16-bit RGB to 8-bit RGB (copyRGB16ToRGB8) \n" );
-        reconstruct.copyRGB16ToRGB8();
+        if ( context.hasColors() ) {
+          TRACE_PATCH( "lossless: copy 16-bit RGB to 8-bit RGB (copyRGB16ToRGB8) \n" );
+          reconstruct.copyRGB16ToRGB8();
+        }
+        if ( context.hasNormals() ) {
+          TRACE_PATCH( "process normals from 16-bit RGB (processNormalsFromRGB16) \n" );
+          reconstruct.processNormalsFromRGB16();
+        }
       }
     }
     /*auto tmp = reconstruct.computeChecksum();

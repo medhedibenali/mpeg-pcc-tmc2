@@ -1589,6 +1589,148 @@ size_t PCCCodec::colorPointCloud( PCCPointSet3&                       reconstruc
          tile.getTotalNumberOfRawPoints();
 }
 
+size_t PCCCodec::addNormalsToPointCloud( PCCPointSet3&                       reconstruct,
+                                         PCCContext&                         context,
+                                         PCCFrameContext&                    tile,
+                                         const std::vector<bool>&            absoluteT1List,
+                                         const size_t                        multipleStreams,
+                                         const uint8_t                       attributeCount,
+                                         size_t                              accTilePointCount,
+                                         const GeneratePointCloudParameters& params ) {
+  TRACE_CODEC( "%s \n", "addNormalsToPointCloud start" );
+
+  if ( reconstruct.getPointCount() == 0 ) { return accTilePointCount; }
+  reconstruct.fillNormal();
+
+#ifdef CODEC_TRACE
+  printChecksum( reconstruct, "addNormalsToPointCloud in" );
+#endif
+  auto&        videoAttribute       = context.getVideoAttributesMultiple()[0];
+  auto&        videoAttributeFrame1 = context.getVideoAttributesMultiple()[1];
+  const size_t mapCount             = params.mapCountMinus1_ + 1;
+  if ( attributeCount == 0 ) {
+    for ( auto& normal : reconstruct.getNormals() ) {
+      for ( size_t n = 0; n < 3; ++n ) { normal[n] = static_cast<uint8_t>( 127 ); }
+    }
+  } else {
+    auto&  pointToPixel      = tile.getPointToPixel();
+    auto&  normals           = reconstruct.getNormals();
+    bool   useAuxVideo       = tile.getUseRawPointsSeparateVideo();
+    size_t numOfRawPointGeos = tile.getTotalNumberOfRawPoints();
+    size_t numberOfEOMPoints = tile.getTotalNumberOfEOMPoints();
+    size_t pointCount        = tile.getTotalNumberOfRegularPoints();
+    if ( !useAuxVideo ) { pointCount += numOfRawPointGeos + numberOfEOMPoints; }
+    TRACE_CODEC( "plt.getProfileCodecGroupIdc() = %d \n",
+                 context.getVps().getProfileTierLevel().getProfileCodecGroupIdc() );
+
+    TRACE_CODEC( "vps.getRawPatchEnabledFlag()  = %d \n", context.getVps().getAuxiliaryVideoPresentFlag( 0 ) );
+    TRACE_CODEC( "useAuxVideo                   = %d \n", useAuxVideo );
+    TRACE_CODEC( "numOfRawGeos                  = %zu \n", numOfRawPointGeos );
+    if ( params.enhancedOccupancyMapCode_ ) {
+      TRACE_CODEC( "numberOfRawPointsAndEOMColors = %zu \n", numOfRawPointGeos + numberOfEOMPoints );
+      TRACE_CODEC( "numberOfEOMPoints             = %zu \n", numberOfEOMPoints );
+    }
+    TRACE_CODEC( "pointCount                   = %zu \n", pointCount );
+    TRACE_CODEC( "reconstruct.getPointCount()  = %zu \n", reconstruct.getPointCount() );
+    TRACE_CODEC( "pointToPixel size            = %zu \n", pointToPixel.size() );
+    TRACE_CODEC( "pointLocalReconstruction     = %d \n", params.pointLocalReconstruction_ );
+    TRACE_CODEC( "singleMapPixelInterleaving   = %d \n", params.singleMapPixelInterleaving_ );
+    TRACE_CODEC( "enhancedOccupancyMapCode       = %d \n", params.enhancedOccupancyMapCode_ );
+    TRACE_CODEC( "multipleStreams              = %d \n", multipleStreams );
+    PCCPointSet3        target;
+    PCCPointSet3        source;
+    std::vector<size_t> targetIndex;
+    targetIndex.resize( 0 );
+    target.clear();
+    source.clear();
+    target.addNormals();
+    source.addNormals();
+    const size_t shift = params.multipleStreams_ ? tile.getFrameIndex() : tile.getFrameIndex() * mapCount;
+    for ( size_t i = accTilePointCount; i < accTilePointCount + pointCount; ++i ) {
+      const PCCVector3<size_t> location = pointToPixel[i - accTilePointCount];
+      const size_t             x        = tile.getLeftTopXInFrame() + location[0];
+      const size_t             y        = tile.getLeftTopYInFrame() + location[1];
+      const size_t             f        = location[2];
+      if ( params.singleMapPixelInterleaving_ ) {
+        if ( ( static_cast<int>( f == 0 && ( x + y ) % 2 == 0 ) | static_cast<int>( f == 1 && ( x + y ) % 2 == 1 ) ) !=
+             0 ) {
+          const auto& image = videoAttribute.getFrame( shift );
+          for ( size_t n = 0; n < 3; ++n ) { normals[i][n] = image.getValue( n, x, y ); }
+          int index = source.addPoint( reconstruct[i] );
+          source.setNormal( index, normals[i] );
+        } else {
+          target.addPoint( reconstruct[i] );
+          targetIndex.push_back( i );
+        }
+      } else if ( multipleStreams != 0U ) {
+        if ( f == 0 ) {
+          const auto& image = videoAttribute.getFrame( tile.getFrameIndex() );
+          for ( size_t n = 0; n < 3; ++n ) { normals[i][n] = image.getValue( n, x, y ); }
+          size_t index = source.addPoint( reconstruct[i] );
+          source.setNormal( index, normals[i] );
+        } else {
+          const auto& image0   = videoAttribute.getFrame( tile.getFrameIndex() );
+          const auto& image1   = videoAttributeFrame1.getFrame( tile.getFrameIndex() );
+          uint8_t     numBits  = image0.getDeprecatedColorFormat() == 0 ? 8 : 16;  // or 8
+          double      offset   = ( 1 << ( numBits - 1 ) );
+          double      maxValue = ( 1 << numBits ) - 1;
+          for ( size_t n = 0; n < 3; ++n ) {
+            // reconstruction
+            auto value0 = static_cast<uint16_t>( image0.getValue( n, x, y ) );
+            auto value1 = static_cast<uint16_t>( image1.getValue( n, x, y ) );
+            if ( !absoluteT1List[f] ) {
+              int32_t newValue = value1;
+              newValue -= offset;
+              // clipping the delta value
+              if ( newValue < -offset ) {
+                newValue = -offset;
+              } else if ( newValue > offset - 1 ) {
+                newValue = offset - 1;
+              }
+              newValue += value0;  // add value0
+              normals[i][n] = newValue < 0 ? 0 : ( newValue > maxValue ? maxValue : static_cast<uint16_t>( newValue ) );
+              // clipping to the unsigned 16 bit range
+            } else {
+              normals[i][n] = value1;
+            }
+          }
+          size_t index = source.addPoint( reconstruct[i] );
+          source.setNormal( index, normals[i] );
+        }
+      } else {
+        if ( f < mapCount ) {
+          const auto& frame = videoAttribute.getFrame( shift + f );
+          for ( size_t n = 0; n < 3; ++n ) { normals[i][n] = frame.getValue( n, x, y ); }
+          int index = source.addPoint( reconstruct[i] );
+          source.setNormal( index, normals[i] );
+        } else {
+          target.addPoint( reconstruct[i] );
+          targetIndex.push_back( i );
+        }
+      }
+    }  // i < accTilePointCount+ pointCount;
+    if ( target.getPointCount() > 0 ) {
+      source.transferNormalWeight( target );
+      for ( size_t i = 0; i < target.getPointCount(); ++i ) {
+        reconstruct.setNormal( targetIndex[i], target.getNormal( i ) );
+      }
+    }
+
+    if ( useAuxVideo ) {
+      for ( const auto& normal : tile.getEOMAttribute() ) { normals[pointCount++] = normal; }
+      for ( const auto& normal : tile.getRawPointsAttribute() ) { normals[pointCount++] = normal; }
+    }
+  }  // noAtt
+
+#ifdef CODEC_TRACE
+  printChecksum( reconstruct, "addNormalsToPointCloud out" );
+  TRACE_CODEC( "%s \n", "addNormalsToPointCloud done" );
+#endif
+
+  return accTilePointCount + tile.getTotalNumberOfRegularPoints() + tile.getTotalNumberOfEOMPoints() +
+         tile.getTotalNumberOfRawPoints();
+}
+
 void PCCCodec::generateRawPointsGeometryfromVideo( PCCContext& context, size_t frameIndex ) {
   TRACE_CODEC( "%s \n", "generateRawPointsGeometryfromVideo start" );
   auto& videoRawPointsGeometry = context.getVideoRawPointsGeometry();
