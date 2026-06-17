@@ -24,6 +24,29 @@ Bash scripts can be use to build mpeg-pcc-tmc2 project:
 - cmake .. 
 - cmake --build . --config Release --parallel 8
 
+### Building Notes
+
+CMake depreciates older versions and eventually removes compatibility with them. So, for newer versions you need to run the following commands to setup CMake:
+
+```sh
+mkdir build
+cd build
+cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-Wno-error=changes-meaning" ..
+cmake --build . --config Release --parallel <number-of-threads>
+```
+
+On linux, you could replace `<number-of-threads>` by `$(nproc)`.
+
+The `-Wno-error=changes-meaning` flag allows building the project even though that warning is present in the project.
+
+And for debug builds, you should run:
+
+```sh
+mkdir build
+cd build
+cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS="-g3" -DCMAKE_CXX_FLAGS="-g3 -Wno-error=changes-meaning" ..
+cmake --build . --config Debug --parallel <number-of-threads>
+```
 
 ### External dependencies
 
