@@ -42,6 +42,7 @@
 #include <map>
 #include <vector>
 #include <utility>
+#include <cstdint>
 
 namespace pcc {
 
