@@ -410,19 +410,19 @@ const UInt gPccHevc_auiPUOffset[NUMBER_OF_PART_SIZES] = { 0, 8, 4, 4, 2, 10, 1, 
 //   }
 // }
 
-Void initRasterToZscanPccHevc ( UInt uiMaxCUWidth, UInt uiMaxCUHeight, UInt uiMaxDepth )
-{
-  UInt  uiMinCUWidth  = uiMaxCUWidth  >> ( uiMaxDepth - 1 );
-  UInt  uiMinCUHeight = uiMaxCUHeight >> ( uiMaxDepth - 1 );
+// Void initRasterToZscanPccHevc ( UInt uiMaxCUWidth, UInt uiMaxCUHeight, UInt uiMaxDepth )
+// {
+//   UInt  uiMinCUWidth  = uiMaxCUWidth  >> ( uiMaxDepth - 1 );
+//   UInt  uiMinCUHeight = uiMaxCUHeight >> ( uiMaxDepth - 1 );
 
-  UInt  uiNumPartInWidth  = (UInt)uiMaxCUWidth  / uiMinCUWidth;
-  UInt  uiNumPartInHeight = (UInt)uiMaxCUHeight / uiMinCUHeight;
+//   UInt  uiNumPartInWidth  = (UInt)uiMaxCUWidth  / uiMinCUWidth;
+//   UInt  uiNumPartInHeight = (UInt)uiMaxCUHeight / uiMinCUHeight;
 
-  for ( UInt i = 0; i < uiNumPartInWidth*uiNumPartInHeight; i++ )
-  {
-   gPccHevc_auiRasterToZscan[gPccHevc_auiZscanToRaster[i] ] = i;
-  }
-}
+//   for ( UInt i = 0; i < uiNumPartInWidth*uiNumPartInHeight; i++ )
+//   {
+//    gPccHevc_auiRasterToZscan[gPccHevc_auiZscanToRaster[i] ] = i;
+//   }
+// }
 
 Void initRasterToPelXYPccHevc ( UInt uiMaxCUWidth, UInt uiMaxCUHeight, UInt uiMaxDepth )
 {
